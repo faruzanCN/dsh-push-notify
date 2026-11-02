@@ -1,9 +1,11 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 export const inject = ['webServer', 'connection'];
 
 const DEFAULT_CONFIG = {
+  titlePrefix: '',
   webUrl: 'http://127.0.0.1:3080',
   notifyOnTurnEnd: true,
   notifyOnApproval: true,
@@ -13,7 +15,7 @@ const DEFAULT_CONFIG = {
     enabled: true,
     serverUrl: 'https://api.day.app',
     deviceKey: '',
-    sound: 'bell',
+    sound: 'system',
     group: 'DeepSeek Harness',
   },
   ntfy: {
@@ -54,45 +56,77 @@ function parseJsonBody(req) {
   });
 }
 
+function normalizePrefix(prefix) {
+  if (!prefix || typeof prefix !== 'string') return '';
+  const trimmed = prefix.trim();
+  if (!trimmed) return '';
+  const limited = trimmed.slice(0, 12);
+  return `[${limited}] `;
+}
+
 export function apply(ctx, config) {
-  const profileDir = process.env.DSH_PROFILE_DIR || process.cwd();
-  const configPath = join(profileDir, 'push-notify-config.json');
-  const legacyBarkPath = join(profileDir, 'bark-config.json');
+  // 智能寻找稳妥的配置存储目录，优先写入 DSH Profile 目录，降级回退到用户主目录
+  const candidateDirs = [
+    process.env.DSH_PROFILE_DIR,
+    join(homedir(), '.dsh', 'profiles', 'web'),
+    join(homedir(), '.dsh'),
+    homedir(),
+    process.cwd(),
+  ].filter(Boolean);
+
+  const getReadPaths = () => {
+    const paths = [];
+    for (const dir of candidateDirs) {
+      paths.push(join(dir, 'push-notify-config.json'));
+      paths.push(join(dir, 'bark-config.json'));
+    }
+    return [...new Set(paths)];
+  };
+
+  const getPrimaryConfigPath = () => {
+    const primaryDir = process.env.DSH_PROFILE_DIR || join(homedir(), '.dsh', 'profiles', 'web');
+    return join(primaryDir, 'push-notify-config.json');
+  };
 
   const loadConfig = () => {
-    try {
-      if (existsSync(configPath)) {
-        const fileData = JSON.parse(readFileSync(configPath, 'utf8'));
-        return {
-          ...DEFAULT_CONFIG,
-          ...config,
-          ...fileData,
-          bark: { ...DEFAULT_CONFIG.bark, ...(config?.bark || {}), ...(fileData?.bark || {}) },
-          ntfy: { ...DEFAULT_CONFIG.ntfy, ...(config?.ntfy || {}), ...(fileData?.ntfy || {}) },
-        };
-      } else if (existsSync(legacyBarkPath)) {
-        // 平滑迁移旧版 bark-config.json
-        const oldData = JSON.parse(readFileSync(legacyBarkPath, 'utf8'));
-        return {
-          ...DEFAULT_CONFIG,
-          ...config,
-          webUrl: oldData.webUrl || DEFAULT_CONFIG.webUrl,
-          notifyOnTurnEnd: oldData.notifyOnTurnEnd ?? true,
-          notifyOnApproval: oldData.notifyOnApproval ?? true,
-          notifyOnQuestion: oldData.notifyOnQuestion ?? true,
-          notifyOnError: oldData.notifyOnError ?? true,
-          bark: {
-            ...DEFAULT_CONFIG.bark,
-            enabled: !!oldData.deviceKey,
-            serverUrl: oldData.serverUrl || DEFAULT_CONFIG.bark.serverUrl,
-            deviceKey: oldData.deviceKey || '',
-            sound: oldData.sound || 'bell',
-            group: oldData.group || 'DeepSeek Harness',
-          },
-        };
+    const tryPaths = getReadPaths();
+    for (const p of tryPaths) {
+      try {
+        if (existsSync(p)) {
+          const fileData = JSON.parse(readFileSync(p, 'utf8'));
+          if (p.endsWith('bark-config.json')) {
+            // 平滑兼容旧版 bark-config.json
+            return {
+              ...DEFAULT_CONFIG,
+              ...config,
+              titlePrefix: fileData.titlePrefix || '',
+              webUrl: fileData.webUrl || DEFAULT_CONFIG.webUrl,
+              notifyOnTurnEnd: fileData.notifyOnTurnEnd ?? true,
+              notifyOnApproval: fileData.notifyOnApproval ?? true,
+              notifyOnQuestion: fileData.notifyOnQuestion ?? true,
+              notifyOnError: fileData.notifyOnError ?? true,
+              bark: {
+                ...DEFAULT_CONFIG.bark,
+                enabled: !!fileData.deviceKey,
+                serverUrl: fileData.serverUrl || DEFAULT_CONFIG.bark.serverUrl,
+                deviceKey: fileData.deviceKey || '',
+                sound: fileData.sound || 'system',
+                group: fileData.group || 'DeepSeek Harness',
+              },
+            };
+          }
+
+          return {
+            ...DEFAULT_CONFIG,
+            ...config,
+            ...fileData,
+            bark: { ...DEFAULT_CONFIG.bark, ...(config?.bark || {}), ...(fileData?.bark || {}) },
+            ntfy: { ...DEFAULT_CONFIG.ntfy, ...(config?.ntfy || {}), ...(fileData?.ntfy || {}) },
+          };
+        }
+      } catch (e) {
+        ctx.logger?.warn?.(`[push-notify] 读取配置文件 ${p} 失败:`, e?.message);
       }
-    } catch (e) {
-      ctx.logger?.warn?.('[push-notify] 读取配置文件失败:', e?.message);
     }
     return { ...DEFAULT_CONFIG, ...config };
   };
@@ -103,16 +137,26 @@ export function apply(ctx, config) {
     activeConfig = {
       ...activeConfig,
       ...newCfg,
+      titlePrefix: (typeof newCfg.titlePrefix === 'string' ? newCfg.titlePrefix.slice(0, 12) : (activeConfig.titlePrefix || '')),
       bark: { ...(activeConfig.bark || DEFAULT_CONFIG.bark), ...(newCfg.bark || {}) },
       ntfy: { ...(activeConfig.ntfy || DEFAULT_CONFIG.ntfy), ...(newCfg.ntfy || {}) },
     };
-    try {
-      writeFileSync(configPath, JSON.stringify(activeConfig, null, 2), 'utf8');
-      return true;
-    } catch (e) {
-      ctx.logger?.error?.('[push-notify] 保存配置文件失败:', e?.message);
-      return false;
+
+    const targetPaths = [
+      getPrimaryConfigPath(),
+      join(homedir(), 'push-notify-config.json'),
+    ];
+
+    let saved = false;
+    for (const p of targetPaths) {
+      try {
+        writeFileSync(p, JSON.stringify(activeConfig, null, 2), 'utf8');
+        saved = true;
+      } catch (e) {
+        ctx.logger?.warn?.(`[push-notify] 保存配置文件到 ${p} 失败:`, e?.message);
+      }
     }
+    return saved;
   };
 
   // Bark 推送执行器
@@ -126,13 +170,14 @@ export function apply(ctx, config) {
     const serverUrl = (cfg.serverUrl || 'https://api.day.app').trim().replace(/\/+$/, '');
     const pushEndpoint = `${serverUrl}/push`;
     const targetUrl = extraUrl || activeConfig.webUrl || undefined;
+    const soundValue = (!cfg.sound || cfg.sound === 'system') ? undefined : cfg.sound;
 
     const payload = {
       device_key: deviceKey,
       title: title || 'DeepSeek Harness',
       body: body || '',
       group: cfg.group || 'DeepSeek Harness',
-      ...(cfg.sound ? { sound: cfg.sound } : {}),
+      ...(soundValue ? { sound: soundValue } : {}),
       ...(targetUrl ? { url: targetUrl } : {}),
     };
 
@@ -154,7 +199,7 @@ export function apply(ctx, config) {
     }
   };
 
-  // ntfy 推送执行器
+  // ntfy 推送执行器 (改用安全标准的 JSON Payload 规范，避免被雷池 WAF 等反向代理拦截)
   const sendNtfy = async (title, body, extraUrl, priority, tags) => {
     const cfg = activeConfig.ntfy || {};
     const topic = cfg.topic?.trim();
@@ -163,22 +208,21 @@ export function apply(ctx, config) {
     }
 
     const serverUrl = (cfg.serverUrl || 'https://ntfy.sh').trim().replace(/\/+$/, '');
-    const endpoint = `${serverUrl}/${encodeURIComponent(topic)}`;
+    const endpoint = `${serverUrl}/`;
     const targetUrl = extraUrl || activeConfig.webUrl || undefined;
 
-    const headers = {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Title': Buffer.from(title || 'DeepSeek Harness', 'utf-8').toString('latin1'),
-      'Priority': priority || cfg.priority || 'default',
+    const payload = {
+      topic,
+      title: title || 'DeepSeek Harness',
+      message: body || '',
+      priority: priority || cfg.priority || 'default',
+      ...(tags && tags.length > 0 ? { tags } : {}),
+      ...(targetUrl ? { click: targetUrl } : {}),
     };
 
-    if (tags && tags.length > 0) {
-      headers['Tags'] = tags.join(',');
-    }
-
-    if (targetUrl) {
-      headers['Click'] = targetUrl;
-    }
+    const headers = {
+      'Content-Type': 'application/json; charset=utf-8',
+    };
 
     if (cfg.token?.trim()) {
       headers['Authorization'] = `Bearer ${cfg.token.trim()}`;
@@ -188,7 +232,7 @@ export function apply(ctx, config) {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers,
-        body: body || '',
+        body: JSON.stringify(payload),
         signal: AbortSignal.timeout(10000),
       });
 
@@ -202,16 +246,19 @@ export function apply(ctx, config) {
     }
   };
 
-  // 统一分发消息到已启用的渠道
+  // 统一分发消息到已启用的渠道（自动附加用户自定义前缀）
   const dispatchNotification = (notification) => {
     Promise.resolve().then(async () => {
       try {
-        const { title, body, extraUrl, priority = 'default', tags = ['bell'] } = notification;
+        const { title = '', body, extraUrl, priority = 'default', tags = ['bell'] } = notification;
+        const prefix = normalizePrefix(activeConfig.titlePrefix);
+        const finalTitle = `${prefix}${title}`;
+
         if (activeConfig.bark?.enabled) {
-          await sendBark(title, body, extraUrl);
+          await sendBark(finalTitle, body, extraUrl);
         }
         if (activeConfig.ntfy?.enabled) {
-          await sendNtfy(title, body, extraUrl, priority, tags);
+          await sendNtfy(finalTitle, body, extraUrl, priority, tags);
         }
       } catch (e) {
         ctx.logger?.warn?.('[push-notify] dispatch error:', e?.message || e);
@@ -261,7 +308,8 @@ export function apply(ctx, config) {
               saveConfig(body.config);
             }
 
-            const testTitle = '🔔 DeepSeek Harness 推送测试';
+            const prefix = normalizePrefix(activeConfig.titlePrefix);
+            const testTitle = `${prefix}🔔 DeepSeek Harness 推送测试`;
             const testBody = '这是一条来自 DSH 的测试通知，通道配置成功！';
 
             const feedback = {};

@@ -10,16 +10,21 @@ window.__ModuleLoader__.load({
     const SETTINGS_NAV_MARKER = 'data-dsh-push-notify-nav';
 
     const SOUND_OPTIONS = [
-      { id: 'bell', label: '清脆铃声 (Bell · 经典首选)' },
-      { id: 'chime', label: '清幽和弦 (Chime · 优雅轻快)' },
-      { id: 'glass', label: '清脆玻璃 (Glass · 灵动微响)' },
+      { id: 'system', label: '🍎 系统默认铃声 (跟随 iOS 短信铃声 · 当前为反弹)' },
+      { id: 'bell', label: '清脆铃铛 (Bell · 极简短促首选)' },
+      { id: 'glass', label: '玻璃水滴 (Glass · 灵动微响)' },
+      { id: 'paymentsuccess', label: '到账音 (Payment Success · 确认感强)' },
+      { id: 'chime', label: '和弦 (Chime · 优雅轻快)' },
+      { id: 'bloom', label: '花开 (Bloom · 悦耳短促)' },
+      { id: 'calypso', label: '加勒比欢快 (Calypso · 节奏感强)' },
+      { id: 'birdsong', label: '清脆鸟鸣 (Birdsong · 自然生动)' },
+      { id: 'fanfare', label: '胜利号角 (Fanfare · 清亮提神)' },
+      { id: 'telegraph', label: '电报短音 (Telegraph · 极简短促)' },
       { id: 'electronic', label: '电子提示 (Electronic · 经典蜂鸣)' },
       { id: 'horn', label: '短促号角 (Horn · 提示清晰)' },
-      { id: 'anticipate', label: '期待提示 (Anticipate · 舒缓柔和)' },
-      { id: 'bloom', label: '花开轻响 (Bloom · 悦耳短促)' },
-      { id: 'calypso', label: '加勒比旋律 (Calypso · 欢快节奏)' },
-      { id: 'paymentsuccess', label: '成功到账音 (Payment Success)' },
+      { id: 'typewriters', label: '机械打字机 (Typewriters · 复古清脆)' },
       { id: 'minuet', label: '小步舞曲 (Minuet · 偏长古典)' },
+      { id: 'alarm', label: '紧急警报 (Alarm · 强提醒)' },
       { id: 'silence', label: '完全静音 (Silence · 仅振动亮屏)' },
     ];
 
@@ -115,10 +120,19 @@ window.__ModuleLoader__.load({
         flex-direction: column;
         gap: 6px;
       }
+      .push-label-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
       .push-label {
         font-size: 13px;
         font-weight: 500;
         color: var(--dsw-alias-label-primary, #1a1a1a);
+      }
+      .push-char-count {
+        font-size: 11px;
+        color: var(--dsw-alias-label-tertiary, #999);
       }
       .push-hint {
         font-size: 12px;
@@ -304,16 +318,17 @@ window.__ModuleLoader__.load({
 
     function PushSection() {
       const [form, setForm] = useState({
+        titlePrefix: '',
         webUrl: 'http://127.0.0.1:3080',
         notifyOnTurnEnd: true,
         notifyOnApproval: true,
         notifyOnQuestion: true,
-        notifyOnError: false,
+        notifyOnError: true,
         bark: {
           enabled: true,
           serverUrl: 'https://api.day.app',
           deviceKey: '',
-          sound: 'bell',
+          sound: 'system',
           group: 'DeepSeek Harness',
         },
         ntfy: {
@@ -347,6 +362,7 @@ window.__ModuleLoader__.load({
               setForm((prev) => ({
                 ...prev,
                 ...data.config,
+                titlePrefix: data.config.titlePrefix || '',
                 bark: { ...prev.bark, ...(data.config.bark || {}) },
                 ntfy: { ...prev.ntfy, ...(data.config.ntfy || {}) },
               }));
@@ -463,7 +479,7 @@ window.__ModuleLoader__.load({
           )
         ),
 
-        // Top Message Toast (保持顶部也可见)
+        // Top Message Toast
         renderMessageBox(),
 
         // Card 1: Bark (iOS)
@@ -511,9 +527,10 @@ window.__ModuleLoader__.load({
               h('label', { className: 'push-label' }, 'Bark 提示音 (Sound)'),
               h('select', {
                 className: 'push-select',
-                value: form.bark.sound || 'bell',
+                value: form.bark.sound || 'system',
                 onChange: (e) => updateBark('sound', e.target.value),
-              }, SOUND_OPTIONS.map((opt) => h('option', { key: opt.id, value: opt.id }, opt.label)))
+              }, SOUND_OPTIONS.map((opt) => h('option', { key: opt.id, value: opt.id }, opt.label))),
+              h('span', { className: 'push-hint' }, '选「系统默认铃声」跟随你在 iPhone【设置 -> 声音与感触 -> 短信铃声】选中的声音（当前为反弹）')
             )
           )
         ),
@@ -583,9 +600,25 @@ window.__ModuleLoader__.load({
           )
         ),
 
-        // Card 3: Common Settings (Web URL & Triggers)
+        // Card 3: Common Settings (Title Prefix, Web URL & Triggers)
         h('div', { className: 'push-card' },
           h('div', { className: 'push-card-title' }, '通用配置 & 触发时机'),
+
+          h('div', { className: 'push-field' },
+            h('div', { className: 'push-label-row' },
+              h('label', { className: 'push-label' }, '通知标题自定义前缀 (Title Prefix)'),
+              h('span', { className: 'push-char-count' }, `${(form.titlePrefix || '').length}/12`)
+            ),
+            h('input', {
+              className: 'push-input',
+              type: 'text',
+              maxLength: 12,
+              value: form.titlePrefix || '',
+              placeholder: '例如：家里NAS、公司电脑（不超12字）',
+              onChange: (e) => updateRoot('titlePrefix', e.target.value.slice(0, 12)),
+            }),
+            h('span', { className: 'push-hint' }, '设置后通知标题会自动带上前缀，如：[家里NAS] ❓ DSH: 等待权限批准')
+          ),
 
           h('div', { className: 'push-field' },
             h('label', { className: 'push-label' }, '点击通知跳转地址 (Web UI URL)'),
@@ -647,7 +680,7 @@ window.__ModuleLoader__.load({
           h('div', { className: 'push-toggle-row' },
             h('div', { className: 'push-toggle-info' },
               h('div', { className: 'push-toggle-label' }, '运行异常提醒 (Agent Error)'),
-              h('div', { className: 'push-toggle-desc' }, 'Agent 执行发生未捕获的错误时')
+              h('div', { className: 'push-toggle-desc' }, '发生额度耗尽(QUOTA)、任务中断或未捕获的错误时')
             ),
             h('label', { className: 'push-switch' },
               h('input', {
@@ -687,7 +720,7 @@ window.__ModuleLoader__.load({
           }, testingChannel === 'all' ? '正在全部测试...' : '测试全部通道')
         ),
 
-        // Bottom Message Toast (在保存/测试按钮正下方直接显示，无需往上滑动！)
+        // Bottom Message Toast
         renderMessageBox()
       );
     }
@@ -747,3 +780,4 @@ window.__ModuleLoader__.load({
     };
   },
 });
+ // reload 1793369482371

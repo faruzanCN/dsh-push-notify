@@ -3,11 +3,12 @@
       name: 'dsh-push-notify'
       disabled: !!js "[...ctx.loader.entries()].some((e) => e.options.name === 'dsh-push-notify' && e.options.id !== 'push-notify' && !e.disabled)"
       config:
+        titlePrefix: ''
         webUrl: 'http://127.0.0.1:3080'
         notifyOnTurnEnd: true
         notifyOnApproval: true
         notifyOnQuestion: true
-        notifyOnError: false
+        notifyOnError: true
         bark:
           enabled: false
           serverUrl: 'https://api.day.app'
