@@ -199,7 +199,33 @@ export function apply(ctx, config) {
     }
   };
 
-  // ntfy 推送执行器 (改用安全标准的 JSON Payload 规范，避免被雷池 WAF 等反向代理拦截)
+  // ntfy 优先级映射：HTTP Header 允许字符串，但 JSON 请求体协议严格要求 integer (1~5)
+  const mapNtfyPriority = (val) => {
+    switch (val) {
+      case 'min':
+      case 1:
+        return 1;
+      case 'low':
+      case 2:
+        return 2;
+      case 'default':
+      case 3:
+      case undefined:
+      case null:
+      case '':
+        return 3;
+      case 'high':
+      case 4:
+        return 4;
+      case 'urgent':
+      case 5:
+        return 5;
+      default:
+        return 3;
+    }
+  };
+
+  // ntfy 推送执行器 (采用安全标准的 JSON Payload 规范，避免被雷池 WAF 等反向代理拦截)
   const sendNtfy = async (title, body, extraUrl, priority, tags) => {
     const cfg = activeConfig.ntfy || {};
     const topic = cfg.topic?.trim();
@@ -208,14 +234,14 @@ export function apply(ctx, config) {
     }
 
     const serverUrl = (cfg.serverUrl || 'https://ntfy.sh').trim().replace(/\/+$/, '');
-    const endpoint = `${serverUrl}/`;
+    const endpoint = serverUrl;
     const targetUrl = extraUrl || activeConfig.webUrl || undefined;
 
     const payload = {
       topic,
       title: title || 'DeepSeek Harness',
       message: body || '',
-      priority: priority || cfg.priority || 'default',
+      priority: mapNtfyPriority(priority || cfg.priority),
       ...(tags && tags.length > 0 ? { tags } : {}),
       ...(targetUrl ? { click: targetUrl } : {}),
     };
