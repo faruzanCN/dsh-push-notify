@@ -298,22 +298,6 @@ window.__ModuleLoader__.load({
         color: #d70015;
         border: 1px solid rgba(255, 59, 48, 0.3);
       }
-      /* Left Nav Icon */
-      [data-dsh-push-notify-nav] svg {
-        display: none !important;
-      }
-      [data-dsh-push-notify-nav]::before {
-        content: "";
-        display: inline-block;
-        width: 16px;
-        height: 16px;
-        margin-right: 8px;
-        flex-shrink: 0;
-        background-repeat: no-repeat;
-        background-position: center;
-        background-size: contain;
-        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23247bbf"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"/></svg>');
-      }
     `;
 
     function PushSection() {
@@ -328,6 +312,7 @@ window.__ModuleLoader__.load({
           enabled: true,
           serverUrl: 'https://api.day.app',
           deviceKey: '',
+          icon: 'https://avatars.githubusercontent.com/u/148330874?v=4',
           sound: 'system',
           group: 'DeepSeek Harness',
         },
@@ -475,7 +460,7 @@ window.__ModuleLoader__.load({
           h('svg', {
             className: 'push-title-icon',
             viewBox: '0 0 24 24',
-            fill: '#247bbf'
+            fill: 'currentColor'
           }, h('path', {
             d: 'M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z'
           })),
@@ -532,6 +517,18 @@ window.__ModuleLoader__.load({
               form.bark.deviceKeyConfigured
                 ? h('span', { className: 'push-hint' }, '已保存的 Key 不会回显；如需更换请直接输入新的 Key')
                 : null
+            ),
+
+            h('div', { className: 'push-field' },
+              h('label', { className: 'push-label' }, 'Bark 通知图标 (Icon URL)'),
+              h('input', {
+                className: 'push-input',
+                type: 'text',
+                value: form.bark.icon || '',
+                placeholder: '默认：https://avatars.githubusercontent.com/u/148330874?v=4',
+                onChange: (e) => updateBark('icon', e.target.value),
+              }),
+              h('span', { className: 'push-hint' }, '默认采用 DeepSeek 官方高清小鲸鱼图标，支持自定义换成任何图片的公网 URL')
             ),
 
             h('div', { className: 'push-field' },
@@ -749,48 +746,32 @@ window.__ModuleLoader__.load({
           document.head.appendChild(style);
         }
 
-        // 2. 注册左侧导航图标同步
-        let disposed = false;
-        let frame = null;
-        const targetNavName = '通知推送';
-        const syncNav = () => {
-          if (disposed) return;
-          const buttons = document.querySelectorAll('[role="dialog"] nav button');
-          for (const button of buttons) {
-            if (button.textContent?.trim() === targetNavName) {
-              button.setAttribute(SETTINGS_NAV_MARKER, '');
-            }
-          }
-        };
-        const schedule = () => {
-          if (disposed || frame !== null) return;
-          frame = requestAnimationFrame(() => {
-            frame = null;
-            syncNav();
-          });
-        };
-        syncNav();
-        const observer = new MutationObserver(schedule);
-        observer.observe(document.body, { childList: true, subtree: true });
-
-        ctx.effect(() => () => {
-          disposed = true;
-          observer.disconnect();
-          if (frame !== null) cancelAnimationFrame(frame);
-          document.querySelectorAll(`[${SETTINGS_NAV_MARKER}]`).forEach((el) => {
-            el.removeAttribute(SETTINGS_NAV_MARKER);
-          });
-        });
+        // 2. 注册左侧导航图标 (使用 DSH 官方 settings.section.icon 标准 Slot，与原生图标 100% 对齐)
+        ctx.slots.inject('settings.section.icon', () => ctx.slots.register({
+          name: 'settings.section.icon',
+          id: 'push-notify',
+        }, (props) => {
+          const size = props?.size || 16;
+          return h('svg', {
+            width: size,
+            height: size,
+            viewBox: '0 0 24 24',
+            fill: 'currentColor',
+            style: { display: 'block' },
+          }, h('path', {
+            d: 'M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z'
+          }));
+        }));
 
         // 3. 注册到 settings.section
         ctx.slots.inject('settings.section', () => ctx.slots.register({
           name: 'settings.section',
           id: 'push-notify',
           order: 25,
-          label: () => targetNavName,
+          label: () => '通知推送',
         }, PushSection));
       },
     };
   },
 });
- // reload 1793369482371 // reload 1793862929426
+ // reload 1793369482371 // reload 1793862929426 // reload 1793864233052 // reload 1793864376363 // reload 1793864589486 // reload 1793864987759

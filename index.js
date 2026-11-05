@@ -15,6 +15,7 @@ const DEFAULT_CONFIG = {
     enabled: true,
     serverUrl: 'https://api.day.app',
     deviceKey: '',
+    icon: 'https://avatars.githubusercontent.com/u/148330874?v=4',
     sound: 'system',
     group: 'DeepSeek Harness',
   },
@@ -98,12 +99,27 @@ function publicConfig(cfg) {
 }
 
 export function apply(ctx, config) {
+  // 动态解析 DSH 官方 Profile 目录：优先读取 profileContext 官方服务，降级支持环境变量与各级标准目录
+  const resolveProfileContextDir = () => {
+    try {
+      const dir = ctx.get?.('profileContext')?.dir;
+      if (typeof dir === 'string' && dir.trim().length > 0) return dir.trim();
+    } catch {
+      // profileContext is optional in some cordis test runners
+    }
+    return null;
+  };
+
+  const dynamicProfileDir = resolveProfileContextDir();
+
   // 智能寻找稳妥的配置存储目录，优先写入 DSH Profile 目录，降级回退到用户主目录
   const candidateDirs = [
     process.env.DSH_PROFILE_DIR,
+    dynamicProfileDir,
     join(homedir(), '.dsh', 'profiles', 'web'),
     join(homedir(), '.dsh'),
     homedir(),
+    process.env.DSH_HOME,
     process.cwd(),
   ].filter(Boolean);
 
@@ -117,7 +133,7 @@ export function apply(ctx, config) {
   };
 
   const getPrimaryConfigPath = () => {
-    const primaryDir = process.env.DSH_PROFILE_DIR || join(homedir(), '.dsh', 'profiles', 'web');
+    const primaryDir = process.env.DSH_PROFILE_DIR || dynamicProfileDir || join(homedir(), '.dsh', 'profiles', 'web');
     return join(primaryDir, 'push-notify-config.json');
   };
 
@@ -231,6 +247,7 @@ export function apply(ctx, config) {
       title: title || 'DeepSeek Harness',
       body: body || '',
       group: cfg.group || 'DeepSeek Harness',
+      ...(cfg.icon?.trim() ? { icon: cfg.icon.trim() } : {}),
       ...(soundValue ? { sound: soundValue } : {}),
       ...(targetUrl ? { url: targetUrl } : {}),
     };
