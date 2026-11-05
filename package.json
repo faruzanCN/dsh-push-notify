@@ -1,6 +1,6 @@
 {
   "name": "dsh-push-notify",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Multi-channel push notification plugin for DeepSeek Harness supporting Bark (iOS) and ntfy (Android/iOS/Web).",
   "main": "./index.js",
   "type": "module",
@@ -33,6 +33,9 @@
     "@deepseek-ai/dsh": {
       "optional": true
     }
+  },
+  "scripts": {
+    "test": "node test/config-secrets.mjs"
   },
   "exports": {
     ".": "./index.js",
