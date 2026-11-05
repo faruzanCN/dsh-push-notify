@@ -7,8 +7,6 @@ window.__ModuleLoader__.load({
     const useEffect = React.useEffect;
     const useRef = React.useRef;
 
-    const SETTINGS_NAV_MARKER = 'data-dsh-push-notify-nav';
-
     const SOUND_OPTIONS = [
       { id: 'system', label: '🍎 系统默认铃声 (跟随 iOS 短信铃声 · 当前为反弹)' },
       { id: 'bell', label: '清脆铃铛 (Bell · 极简短促首选)' },
@@ -48,7 +46,7 @@ window.__ModuleLoader__.load({
         max-width: 720px;
         display: flex;
         flex-direction: column;
-        gap: 24px;
+        gap: 20px;
         color: var(--dsw-alias-label-primary, #1a1a1a);
         font-family: inherit;
         box-sizing: border-box;
@@ -74,6 +72,86 @@ window.__ModuleLoader__.load({
         line-height: 20px;
         margin-top: 2px;
       }
+
+      /* Channel Tabs Bar (Modern Segmented Style) */
+      .push-tabs-nav {
+        display: inline-flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.04)) !important;
+        padding: 4px !important;
+        border-radius: var(--dsw-radius-lg, 10px) !important;
+        gap: 4px !important;
+        align-self: flex-start !important;
+        border: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08)) !important;
+        box-sizing: border-box !important;
+        margin-bottom: 4px !important;
+      }
+      .push-tab-item {
+        height: 32px !important;
+        padding: 0 14px !important;
+        border-radius: var(--dsw-radius-md, 7px) !important;
+        font-size: 13px !important;
+        line-height: 32px !important;
+        font-weight: 500 !important;
+        cursor: pointer !important;
+        display: inline-flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        color: var(--dsw-alias-label-secondary, #666) !important;
+        background: transparent !important;
+        border: none !important;
+        outline: none !important;
+        transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        user-select: none !important;
+        box-sizing: border-box !important;
+      }
+      .push-tab-item:hover {
+        color: var(--dsw-alias-label-primary, #1a1a1a) !important;
+      }
+      .push-tab-item.active {
+        background: var(--dsw-alias-bg-layer-1, #ffffff) !important;
+        color: var(--dsw-alias-label-primary, #1a1a1a) !important;
+        font-weight: 600 !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 0 1px rgba(0, 0, 0, 0.08) !important;
+      }
+      .push-tab-icon {
+        width: 14px !important;
+        height: 14px !important;
+        max-width: 14px !important;
+        max-height: 14px !important;
+        min-width: 14px !important;
+        min-height: 14px !important;
+        flex-shrink: 0 !important;
+        opacity: 0.8 !important;
+        display: inline-block !important;
+        vertical-align: middle !important;
+      }
+      .push-tab-item.active .push-tab-icon {
+        opacity: 1 !important;
+      }
+      .push-tab-status-pill {
+        font-size: 11px !important;
+        line-height: 16px !important;
+        height: 16px !important;
+        padding: 0 6px !important;
+        border-radius: 8px !important;
+        font-weight: 500 !important;
+        background: rgba(0, 0, 0, 0.06) !important;
+        color: var(--dsw-alias-label-tertiary, #888) !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        transition: all 0.15s ease !important;
+      }
+      .push-tab-status-pill.enabled {
+        background: rgba(52, 199, 89, 0.14) !important;
+        color: #248a3d !important;
+        font-weight: 600 !important;
+      }
+
       .push-card {
         background: var(--dsw-alias-bg-layer-3, rgba(0, 0, 0, 0.02));
         border: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
@@ -179,6 +257,37 @@ window.__ModuleLoader__.load({
         font-size: 12px;
         color: var(--dsw-alias-label-secondary, #666);
       }
+
+      /* Event Row with Independent Sound Selector */
+      .push-event-row {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px 0;
+        border-bottom: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.06));
+      }
+      .push-event-row:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+      }
+      .push-event-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .push-event-sound-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
+        padding-left: 2px;
+      }
+      .push-event-sound-label {
+        font-size: 12px;
+        color: var(--dsw-alias-label-secondary, #666);
+        flex-shrink: 0;
+      }
+
       /* Custom switch */
       .push-switch {
         position: relative;
@@ -301,6 +410,7 @@ window.__ModuleLoader__.load({
     `;
 
     function PushSection() {
+      const [activeTab, setActiveTab] = useState('bark'); // 'bark' | 'ntfy'
       const [form, setForm] = useState({
         titlePrefix: '',
         webUrl: 'http://127.0.0.1:3080',
@@ -314,6 +424,10 @@ window.__ModuleLoader__.load({
           deviceKey: '',
           icon: 'https://avatars.githubusercontent.com/u/148330874?v=4',
           sound: 'system',
+          soundTurnEnd: 'system',
+          soundApproval: 'system',
+          soundQuestion: 'system',
+          soundError: 'system',
           group: 'DeepSeek Harness',
         },
         ntfy: {
@@ -470,15 +584,59 @@ window.__ModuleLoader__.load({
           )
         ),
 
+        // Modern Segmented Tabs Bar
+        h('div', { className: 'push-tabs-nav' },
+          h('button', {
+            type: 'button',
+            className: `push-tab-item ${activeTab === 'bark' ? 'active' : ''}`,
+            onClick: () => setActiveTab('bark'),
+          },
+            h('svg', {
+              className: 'push-tab-icon',
+              width: 14,
+              height: 14,
+              viewBox: '0 0 24 24',
+              fill: 'currentColor',
+              style: { width: '14px', height: '14px', minWidth: '14px', minHeight: '14px', maxWidth: '14px', maxHeight: '14px' }
+            }, h('path', {
+              d: 'M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.61-.75 1.04-1.8 0.92-2.87-.93.04-2.02.63-2.66 1.38-.57.65-1.06 1.73-.93 2.76 1.04.08 2.07-.53 2.67-1.27z'
+            })),
+            'Bark (iOS)',
+            h('span', { className: `push-tab-status-pill ${form.bark.enabled ? 'enabled' : ''}` },
+              form.bark.enabled ? '已启用' : '未开启'
+            )
+          ),
+          h('button', {
+            type: 'button',
+            className: `push-tab-item ${activeTab === 'ntfy' ? 'active' : ''}`,
+            onClick: () => setActiveTab('ntfy'),
+          },
+            h('svg', {
+              className: 'push-tab-icon',
+              width: 14,
+              height: 14,
+              viewBox: '0 0 24 24',
+              fill: 'currentColor',
+              style: { width: '14px', height: '14px', minWidth: '14px', minHeight: '14px', maxWidth: '14px', maxHeight: '14px' }
+            }, h('path', {
+              d: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z'
+            })),
+            'ntfy (全平台)',
+            h('span', { className: `push-tab-status-pill ${form.ntfy.enabled ? 'enabled' : ''}` },
+              form.ntfy.enabled ? '已启用' : '未开启'
+            )
+          )
+        ),
+
         // Top Message Toast
         renderMessageBox(),
 
-        // Card 1: Bark (iOS)
-        h('div', { className: 'push-card' },
+        // Tab Content 1: Bark
+        activeTab === 'bark' && h('div', { className: 'push-card' },
           h('div', { className: 'push-card-head' },
             h('div', { className: 'push-card-head-left' },
               h('span', { className: 'push-card-badge badge-bark' }, 'Bark'),
-              h('div', { className: 'push-card-title' }, 'Bark 推送通道 (iOS)')
+              h('div', { className: 'push-card-title' }, 'Bark 通道配置 (iOS)')
             ),
             h('label', { className: 'push-switch' },
               h('input', {
@@ -532,23 +690,23 @@ window.__ModuleLoader__.load({
             ),
 
             h('div', { className: 'push-field' },
-              h('label', { className: 'push-label' }, 'Bark 提示音 (Sound)'),
+              h('label', { className: 'push-label' }, '默认兜底提示音 (Sound)'),
               h('select', {
                 className: 'push-select',
                 value: form.bark.sound || 'system',
                 onChange: (e) => updateBark('sound', e.target.value),
               }, SOUND_OPTIONS.map((opt) => h('option', { key: opt.id, value: opt.id }, opt.label))),
-              h('span', { className: 'push-hint' }, '选「系统默认铃声」跟随你在 iPhone【设置 -> 声音与感触 -> 短信铃声】选中的声音（当前为反弹）')
+              h('span', { className: 'push-hint' }, '当下方具体事件未单独指定时，使用此默认铃声')
             )
           )
         ),
 
-        // Card 2: ntfy (Multi-platform)
-        h('div', { className: 'push-card' },
+        // Tab Content 2: ntfy
+        activeTab === 'ntfy' && h('div', { className: 'push-card' },
           h('div', { className: 'push-card-head' },
             h('div', { className: 'push-card-head-left' },
               h('span', { className: 'push-card-badge badge-ntfy' }, 'ntfy'),
-              h('div', { className: 'push-card-title' }, 'ntfy 推送通道 (Android / iOS / Web / Desktop)')
+              h('div', { className: 'push-card-title' }, 'ntfy 通道配置 (Android / iOS / Web / Desktop)')
             ),
             h('label', { className: 'push-switch' },
               h('input', {
@@ -610,10 +768,11 @@ window.__ModuleLoader__.load({
           )
         ),
 
-        // Card 3: Common Settings (Title Prefix, Web URL & Triggers)
+        // Shared Triggers & Event Sound Settings Card
         h('div', { className: 'push-card' },
-          h('div', { className: 'push-card-title' }, '通用配置 & 触发时机'),
+          h('div', { className: 'push-card-title' }, '触发时机 & 事件独立设置'),
 
+          // Global Title Prefix
           h('div', { className: 'push-field' },
             h('div', { className: 'push-label-row' },
               h('label', { className: 'push-label' }, '通知标题自定义前缀 (Title Prefix)'),
@@ -630,6 +789,7 @@ window.__ModuleLoader__.load({
             h('span', { className: 'push-hint' }, '设置后通知标题会自动带上前缀，如：[家里NAS] ❓ DSH: 等待权限批准')
           ),
 
+          // Web URL Click Action
           h('div', { className: 'push-field' },
             h('label', { className: 'push-label' }, '点击通知跳转地址 (Web UI URL)'),
             h('input', {
@@ -642,63 +802,111 @@ window.__ModuleLoader__.load({
             h('span', { className: 'push-hint' }, '手机收到通知点击后可直接唤起该页面进行审批或对话')
           ),
 
-          h('div', { className: 'push-toggle-row' },
-            h('div', { className: 'push-toggle-info' },
-              h('div', { className: 'push-toggle-label' }, '等待操作批准 (Approval)'),
-              h('div', { className: 'push-toggle-desc' }, 'Agent 需要执行高权限操作或修改系统文件等待您确认时')
+          // Event 1: Turn End
+          h('div', { className: 'push-event-row' },
+            h('div', { className: 'push-event-head' },
+              h('div', { className: 'push-toggle-info' },
+                h('div', { className: 'push-toggle-label' }, '对话回合结束 (Turn End)'),
+                h('div', { className: 'push-toggle-desc' }, 'AI 思考和多步工具调用执行完成，等待您下一步指令时')
+              ),
+              h('label', { className: 'push-switch' },
+                h('input', {
+                  type: 'checkbox',
+                  checked: !!form.notifyOnTurnEnd,
+                  onChange: (e) => updateRoot('notifyOnTurnEnd', e.target.checked),
+                }),
+                h('span', { className: 'push-slider' })
+              )
             ),
-            h('label', { className: 'push-switch' },
-              h('input', {
-                type: 'checkbox',
-                checked: !!form.notifyOnApproval,
-                onChange: (e) => updateRoot('notifyOnApproval', e.target.checked),
-              }),
-              h('span', { className: 'push-slider' })
+            (activeTab === 'bark' && form.notifyOnTurnEnd && form.bark.enabled) && h('div', { className: 'push-event-sound-wrap' },
+              h('span', { className: 'push-event-sound-label' }, 'Bark 专属铃声：'),
+              h('select', {
+                className: 'push-select',
+                style: { height: '32px', fontSize: '12px' },
+                value: form.bark.soundTurnEnd || form.bark.sound || 'system',
+                onChange: (e) => updateBark('soundTurnEnd', e.target.value),
+              }, SOUND_OPTIONS.map((opt) => h('option', { key: opt.id, value: opt.id }, opt.label)))
             )
           ),
 
-          h('div', { className: 'push-toggle-row' },
-            h('div', { className: 'push-toggle-info' },
-              h('div', { className: 'push-toggle-label' }, '等待回答/确认 (User Questions)'),
-              h('div', { className: 'push-toggle-desc' }, 'Agent 提出单选/多选题或计划审核等待您输入时')
+          // Event 2: Approval
+          h('div', { className: 'push-event-row' },
+            h('div', { className: 'push-event-head' },
+              h('div', { className: 'push-toggle-info' },
+                h('div', { className: 'push-toggle-label' }, '等待操作批准 (Approval)'),
+                h('div', { className: 'push-toggle-desc' }, 'Agent 需要执行高权限操作或修改系统文件等待您确认时')
+              ),
+              h('label', { className: 'push-switch' },
+                h('input', {
+                  type: 'checkbox',
+                  checked: !!form.notifyOnApproval,
+                  onChange: (e) => updateRoot('notifyOnApproval', e.target.checked),
+                }),
+                h('span', { className: 'push-slider' })
+              )
             ),
-            h('label', { className: 'push-switch' },
-              h('input', {
-                type: 'checkbox',
-                checked: !!form.notifyOnQuestion,
-                onChange: (e) => updateRoot('notifyOnQuestion', e.target.checked),
-              }),
-              h('span', { className: 'push-slider' })
+            (activeTab === 'bark' && form.notifyOnApproval && form.bark.enabled) && h('div', { className: 'push-event-sound-wrap' },
+              h('span', { className: 'push-event-sound-label' }, 'Bark 专属铃声：'),
+              h('select', {
+                className: 'push-select',
+                style: { height: '32px', fontSize: '12px' },
+                value: form.bark.soundApproval || form.bark.sound || 'system',
+                onChange: (e) => updateBark('soundApproval', e.target.value),
+              }, SOUND_OPTIONS.map((opt) => h('option', { key: opt.id, value: opt.id }, opt.label)))
             )
           ),
 
-          h('div', { className: 'push-toggle-row' },
-            h('div', { className: 'push-toggle-info' },
-              h('div', { className: 'push-toggle-label' }, '对话回合结束 (Turn End)'),
-              h('div', { className: 'push-toggle-desc' }, 'AI 思考和多步工具调用执行完成，等待您下一步指令时')
+          // Event 3: Question
+          h('div', { className: 'push-event-row' },
+            h('div', { className: 'push-event-head' },
+              h('div', { className: 'push-toggle-info' },
+                h('div', { className: 'push-toggle-label' }, '等待回答/确认 (User Questions)'),
+                h('div', { className: 'push-toggle-desc' }, 'Agent 提出单选/多选题或计划审核等待您输入时')
+              ),
+              h('label', { className: 'push-switch' },
+                h('input', {
+                  type: 'checkbox',
+                  checked: !!form.notifyOnQuestion,
+                  onChange: (e) => updateRoot('notifyOnQuestion', e.target.checked),
+                }),
+                h('span', { className: 'push-slider' })
+              )
             ),
-            h('label', { className: 'push-switch' },
-              h('input', {
-                type: 'checkbox',
-                checked: !!form.notifyOnTurnEnd,
-                onChange: (e) => updateRoot('notifyOnTurnEnd', e.target.checked),
-              }),
-              h('span', { className: 'push-slider' })
+            (activeTab === 'bark' && form.notifyOnQuestion && form.bark.enabled) && h('div', { className: 'push-event-sound-wrap' },
+              h('span', { className: 'push-event-sound-label' }, 'Bark 专属铃声：'),
+              h('select', {
+                className: 'push-select',
+                style: { height: '32px', fontSize: '12px' },
+                value: form.bark.soundQuestion || form.bark.sound || 'system',
+                onChange: (e) => updateBark('soundQuestion', e.target.value),
+              }, SOUND_OPTIONS.map((opt) => h('option', { key: opt.id, value: opt.id }, opt.label)))
             )
           ),
 
-          h('div', { className: 'push-toggle-row' },
-            h('div', { className: 'push-toggle-info' },
-              h('div', { className: 'push-toggle-label' }, '运行异常提醒 (Agent Error)'),
-              h('div', { className: 'push-toggle-desc' }, '发生额度耗尽(QUOTA)、任务中断或未捕获的错误时')
+          // Event 4: Error
+          h('div', { className: 'push-event-row' },
+            h('div', { className: 'push-event-head' },
+              h('div', { className: 'push-toggle-info' },
+                h('div', { className: 'push-toggle-label' }, '运行异常提醒 (Agent Error)'),
+                h('div', { className: 'push-toggle-desc' }, '发生额度耗尽(QUOTA)、任务中断或未捕获的错误时')
+              ),
+              h('label', { className: 'push-switch' },
+                h('input', {
+                  type: 'checkbox',
+                  checked: !!form.notifyOnError,
+                  onChange: (e) => updateRoot('notifyOnError', e.target.checked),
+                }),
+                h('span', { className: 'push-slider' })
+              )
             ),
-            h('label', { className: 'push-switch' },
-              h('input', {
-                type: 'checkbox',
-                checked: !!form.notifyOnError,
-                onChange: (e) => updateRoot('notifyOnError', e.target.checked),
-              }),
-              h('span', { className: 'push-slider' })
+            (activeTab === 'bark' && form.notifyOnError && form.bark.enabled) && h('div', { className: 'push-event-sound-wrap' },
+              h('span', { className: 'push-event-sound-label' }, 'Bark 专属铃声：'),
+              h('select', {
+                className: 'push-select',
+                style: { height: '32px', fontSize: '12px' },
+                value: form.bark.soundError || form.bark.sound || 'system',
+                onChange: (e) => updateBark('soundError', e.target.value),
+              }, SOUND_OPTIONS.map((opt) => h('option', { key: opt.id, value: opt.id }, opt.label)))
             )
           )
         ),
@@ -774,4 +982,4 @@ window.__ModuleLoader__.load({
     };
   },
 });
- // reload 1793369482371 // reload 1793862929426 // reload 1793864233052 // reload 1793864376363 // reload 1793864589486 // reload 1793864987759
+ // reload 1793865986555 // reload 1793866570370 // reload 1793866735135 // reload 1793867447239

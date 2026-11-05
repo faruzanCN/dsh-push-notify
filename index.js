@@ -17,6 +17,10 @@ const DEFAULT_CONFIG = {
     deviceKey: '',
     icon: 'https://avatars.githubusercontent.com/u/148330874?v=4',
     sound: 'system',
+    soundTurnEnd: 'system',
+    soundApproval: 'system',
+    soundQuestion: 'system',
+    soundError: 'system',
     group: 'DeepSeek Harness',
   },
   ntfy: {
@@ -197,8 +201,6 @@ export function apply(ctx, config) {
     for (const [group, fields] of Object.entries(SECRET_FIELDS)) {
       if (!merged[group]) continue;
       for (const field of fields) {
-        // <field>Configured / <field>Masked are display-only projections; drop
-        // them so a client that echoes the whole form cannot persist them.
         delete merged[group][`${field}Configured`];
         delete merged[group][`${field}Masked`];
         const next = merged[group][field];
@@ -229,8 +231,8 @@ export function apply(ctx, config) {
     return saved;
   };
 
-  // Bark 推送执行器
-  const sendBark = async (title, body, extraUrl) => {
+  // Bark 推送执行器 (支持针对四种事件独立传入 sound)
+  const sendBark = async (title, body, extraUrl, customSound) => {
     const cfg = activeConfig.bark || {};
     const deviceKey = cfg.deviceKey?.trim();
     if (!deviceKey) {
@@ -240,7 +242,10 @@ export function apply(ctx, config) {
     const serverUrl = (cfg.serverUrl || 'https://api.day.app').trim().replace(/\/+$/, '');
     const pushEndpoint = `${serverUrl}/push`;
     const targetUrl = extraUrl || activeConfig.webUrl || undefined;
-    const soundValue = (!cfg.sound || cfg.sound === 'system') ? undefined : cfg.sound;
+
+    // 确定当前使用的铃声：优先使用事件独立配置，其次退回全局 sound
+    const targetSound = customSound || cfg.sound || 'system';
+    const soundValue = (!targetSound || targetSound === 'system') ? undefined : targetSound;
 
     const payload = {
       device_key: deviceKey,
@@ -343,16 +348,34 @@ export function apply(ctx, config) {
     }
   };
 
+  // 根据事件类别解析 Bark 的对应铃声
+  const resolveBarkSoundForEvent = (eventKind) => {
+    const b = activeConfig.bark || {};
+    switch (eventKind) {
+      case 'turnEnd':
+        return b.soundTurnEnd || b.sound || 'system';
+      case 'approval':
+        return b.soundApproval || b.sound || 'system';
+      case 'question':
+        return b.soundQuestion || b.sound || 'system';
+      case 'error':
+        return b.soundError || b.sound || 'system';
+      default:
+        return b.sound || 'system';
+    }
+  };
+
   // 统一分发消息到已启用的渠道（自动附加用户自定义前缀）
   const dispatchNotification = (notification) => {
     Promise.resolve().then(async () => {
       try {
-        const { title = '', body, extraUrl, priority = 'default', tags = ['bell'] } = notification;
+        const { title = '', body, extraUrl, priority = 'default', tags = ['bell'], eventKind } = notification;
         const prefix = normalizePrefix(activeConfig.titlePrefix);
         const finalTitle = `${prefix}${title}`;
 
         if (activeConfig.bark?.enabled) {
-          await sendBark(finalTitle, body, extraUrl);
+          const barkSound = resolveBarkSoundForEvent(eventKind);
+          await sendBark(finalTitle, body, extraUrl, barkSound);
         }
         if (activeConfig.ntfy?.enabled) {
           await sendNtfy(finalTitle, body, extraUrl, priority, tags);
@@ -437,7 +460,7 @@ export function apply(ctx, config) {
       const reason = req.reason || (req.displayReason && (req.displayReason.zh || req.displayReason.en)) || '需要您授权确认';
       const title = '⚠️ DSH: 等待权限批准';
       const body = `工具 [${toolName}] 请求执行：\n${reason}`;
-      dispatchNotification({ title, body, priority: 'high', tags: ['warning', 'lock'] });
+      dispatchNotification({ title, body, priority: 'high', tags: ['warning', 'lock'], eventKind: 'approval' });
     }
     return next();
   });
@@ -455,7 +478,7 @@ export function apply(ctx, config) {
 
         const title = '❓ DSH: 等待用户输入/选择';
         const body = questionTexts || 'Agent 正在等待您的确认或选择方案';
-        dispatchNotification({ title, body, priority: 'high', tags: ['question', 'speech_balloon'] });
+        dispatchNotification({ title, body, priority: 'high', tags: ['question', 'speech_balloon'], eventKind: 'question' });
       } catch (err) {
         ctx.logger?.warn?.('[push-notify] ask_user_question notify error:', err?.message || err);
       }
@@ -474,7 +497,7 @@ export function apply(ctx, config) {
 
       const title = '❓ DSH: 等待用户输入/确认';
       const body = questionTexts || 'Agent 正在等待您的确认或输入选项';
-      dispatchNotification({ title, body, priority: 'high', tags: ['question', 'speech_balloon'] });
+      dispatchNotification({ title, body, priority: 'high', tags: ['question', 'speech_balloon'], eventKind: 'question' });
     }
     return next();
   });
@@ -485,7 +508,7 @@ export function apply(ctx, config) {
       const turnNum = payload?.turn !== undefined ? ` (第 ${payload.turn} 轮)` : '';
       const title = '✅ DSH: 对话回合结束';
       const body = `AI 已完成当前回合的思考与响应${turnNum}，等待下一轮指令。`;
-      dispatchNotification({ title, body, priority: 'default', tags: ['white_check_mark', 'robot'] });
+      dispatchNotification({ title, body, priority: 'default', tags: ['white_check_mark', 'robot'], eventKind: 'turnEnd' });
     }
   });
 
@@ -500,7 +523,7 @@ export function apply(ctx, config) {
       const reason = event.data?.reason || '需要执行操作授权';
       const title = '⚠️ DSH: 等待权限批准';
       const body = `工具 [${toolName}] 请求执行权限：\n${reason}`;
-      dispatchNotification({ title, body, priority: 'high', tags: ['warning', 'lock'] });
+      dispatchNotification({ title, body, priority: 'high', tags: ['warning', 'lock'], eventKind: 'approval' });
       return;
     }
 
@@ -526,7 +549,7 @@ export function apply(ctx, config) {
 
         const title = '❌ DSH: 本轮运行失败';
         const body = `本轮对话${turnText}因异常停止：\n${errMsg}${code ? `\n[错误码: ${code}]` : ''}`;
-        dispatchNotification({ title, body, priority: 'urgent', tags: ['x', 'warning', 'money_with_wings'] });
+        dispatchNotification({ title, body, priority: 'urgent', tags: ['x', 'warning', 'money_with_wings'], eventKind: 'error' });
         return;
       }
 
@@ -537,31 +560,13 @@ export function apply(ctx, config) {
         if (reason.reason?.kind === 'hook' && reason.reason?.reason === 'deepseek-account/signed-out') {
           abortDesc = '因账号退出登录，任务已停止。';
         } else if (reason.kind === 'interrupted') {
-          abortDesc = 'DSH 进程在任务完成前退出。';
+          abortDesc = '任务已被手动中断或暂停。';
         }
-        const title = '⏹️ DSH: 任务已终止';
-        const body = `本轮对话${turnText}${abortDesc}`;
-        dispatchNotification({ title, body, priority: 'high', tags: ['stop_button', 'warning'] });
-        return;
-      }
 
-      // 达到 Token 最大上限限制截断
-      if (reason.kind === 'max-tokens') {
-        if (!activeConfig.notifyOnTurnEnd) return;
-        const title = '⚠️ DSH: 已达到最大 Token 限制';
-        const body = `本轮对话${turnText}输出达到了上下文 Token 上限，已截断停止。`;
-        dispatchNotification({ title, body, priority: 'high', tags: ['warning'] });
+        const title = '⚠️ DSH: 任务已中断';
+        const body = `对话${turnText}未完成：${abortDesc}`;
+        dispatchNotification({ title, body, priority: 'high', tags: ['pause_button', 'information_source'], eventKind: 'error' });
       }
-    }
-  }, { global: true });
-
-  // 5. Agent 错误兜底
-  ctx.on('agent/error', (payload) => {
-    if (activeConfig.notifyOnError) {
-      const errorMsg = payload?.error?.message || String(payload?.error || '未知异常');
-      const title = '❌ DSH: 运行异常';
-      const body = `第 ${payload?.turn ?? '?'} 轮第 ${payload?.step ?? '?'} 步出错：\n${errorMsg}`;
-      dispatchNotification({ title, body, priority: 'urgent', tags: ['x', 'warning'] });
     }
   });
 }
